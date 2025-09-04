@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Library to read XLSX files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .container {
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 2rem;
+        }
+        .tab-button.active {
+            background-color: #e5e7eb;
+            font-weight: bold;
+        }
+        .student-card {
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+        }
+        .student-card.present {
+            background-color: #d1fae5; /* Green 100 */
+            border-color: #34d399; /* Green 400 */
+        }
+        .student-card.absent {
+            background-color: #fee2e2; /* Red 100 */
+            border-color: #f87171; /* Red 400 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <div class="container bg-white shadow-xl rounded-2xl overflow-hidden p-8">
+        <h1 class="text-3xl font-bold mb-6 text-center text-gray-800">Attendance Tracker</h1>
+        
+        <!-- Tab Navigation -->
+        <div class="flex mb-6 bg-gray-200 rounded-full p-1">
+            <button id="addStudentsTab" class="tab-button flex-1 py-2 px-4 rounded-full text-center transition-colors duration-200 active">Manage Students</button>
+            <button id="takeAttendanceTab" class="tab-button flex-1 py-2 px-4 rounded-full text-center transition-colors duration-200">Take Attendance</button>
+            <button id="monthlyReportTab" class="tab-button flex-1 py-2 px-4 rounded-full text-center transition-colors duration-200">Monthly Report</button>
+        </div>
+
+        <!-- Section: Manage Students -->
+        <div id="addStudentsSection" class="tab-content">
+            <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h2 class="text-xl font-semibold mb-3 text-gray-700">Add New Student Manually</h2>
+                <div class="flex flex-col space-y-2">
+                    <input type="text" id="studentNameInput" placeholder="Enter student name" class="rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                    <input type="number" id="studentAgeInput" placeholder="Enter student age" class="rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                    <input type="text" id="studentStandardInput" placeholder="Enter student standard" class="rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                    <button id="addStudentBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Add Student</button>
+                </div>
+            </div>
+
+            <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h2 class="text-xl font-semibold mb-3 text-gray-700">Upload Student List (XLSX)</h2>
+                <p class="text-sm text-gray-500 mb-2">Your file should have columns for Name, Age, and Standard.</p>
+                <div class="flex items-center space-x-2">
+                    <label for="uploadStudentsInput" class="w-full text-center bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-6 rounded-lg transition-colors cursor-pointer">
+                        Select File
+                    </label>
+                    <input type="file" id="uploadStudentsInput" accept=".xlsx" class="hidden">
+                    <button id="clearStudentsBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg transition-colors">Clear All</button>
+                </div>
+            </div>
+
+            <div id="studentListManage" class="space-y-4">
+                <!-- Student list for management will be injected here -->
+            </div>
+        </div>
+
+        <!-- Section: Take Attendance -->
+        <div id="takeAttendanceSection" class="tab-content hidden">
+            <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h2 class="text-xl font-semibold mb-3 text-gray-700">Take Attendance for Today</h2>
+                <input type="date" id="attendanceDateInput" class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+            </div>
+
+            <div id="attendanceList" class="space-y-4">
+                <!-- Attendance list will be injected here -->
+            </div>
+            <div class="mt-6 text-center">
+                <button id="submitAttendanceBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg transition-colors">Submit Attendance</button>
+            </div>
+        </div>
+
+        <!-- Section: Monthly Report -->
+        <div id="monthlyReportSection" class="tab-content hidden">
+            <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h2 class="text-xl font-semibold mb-3 text-gray-700">Monthly Attendance Report</h2>
+                <input type="month" id="reportMonthInput" class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+            </div>
+            <div id="reportContainer" class="space-y-4">
+                <!-- Monthly report will be injected here -->
+            </div>
+        </div>
+
+
+        <!-- Modal for alerts -->
+        <div id="alertModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center">
+            <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
+                <p id="alertMessage" class="mb-4 text-lg font-semibold"></p>
+                <button onclick="closeModal()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const studentNameInput = document.getElementById('studentNameInput');
+        const studentAgeInput = document.getElementById('studentAgeInput');
+        const studentStandardInput = document.getElementById('studentStandardInput');
+        const addStudentBtn = document.getElementById('addStudentBtn');
+        const studentListManageEl = document.getElementById('studentListManage');
+        const attendanceListEl = document.getElementById('attendanceList');
+        const attendanceDateInput = document.getElementById('attendanceDateInput');
+        const submitAttendanceBtn = document.getElementById('submitAttendanceBtn');
+        const alertModal = document.getElementById('alertModal');
+        const alertMessage = document.getElementById('alertMessage');
+        const addStudentsTab = document.getElementById('addStudentsTab');
+        const takeAttendanceTab = document.getElementById('takeAttendanceTab');
+        const monthlyReportTab = document.getElementById('monthlyReportTab');
+        const addStudentsSection = document.getElementById('addStudentsSection');
+        const takeAttendanceSection = document.getElementById('takeAttendanceSection');
+        const monthlyReportSection = document.getElementById('monthlyReportSection');
+        const reportMonthInput = document.getElementById('reportMonthInput');
+        const reportContainerEl = document.getElementById('reportContainer');
+        const uploadStudentsInput = document.getElementById('uploadStudentsInput');
+        const clearStudentsBtn = document.getElementById('clearStudentsBtn');
+
+        let students = JSON.parse(localStorage.getItem('students')) || [];
+        let attendanceRecords = JSON.parse(localStorage.getItem('attendanceRecords')) || {};
+
+        function showModal(message) {
+            alertMessage.textContent = message;
+            alertModal.classList.remove('hidden');
+            alertModal.classList.add('flex');
+        }
+
+        function closeModal() {
+            alertModal.classList.add('hidden');
+            alertModal.classList.remove('flex');
+        }
+
+        function formatDate(date) {
+            const d = new Date(date);
+            const year = d.getFullYear();
+            const month = (d.getMonth() + 1).toString().padStart(2, '0');
+            const day = d.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function showTab(tabId) {
+            const tabs = document.querySelectorAll('.tab-button');
+            const sections = document.querySelectorAll('.tab-content');
+
+            tabs.forEach(tab => tab.classList.remove('active'));
+            sections.forEach(section => section.classList.add('hidden'));
+
+            if (tabId === 'addStudents') {
+                addStudentsTab.classList.add('active');
+                addStudentsSection.classList.remove('hidden');
+                renderStudentsManage();
+            } else if (tabId === 'takeAttendance') {
+                takeAttendanceTab.classList.add('active');
+                takeAttendanceSection.classList.remove('hidden');
+                renderAttendance();
+            } else if (tabId === 'monthlyReport') {
+                monthlyReportTab.classList.add('active');
+                monthlyReportSection.classList.remove('hidden');
+                renderMonthlyReport();
+            }
+        }
+        
+        function renderStudentsManage() {
+            studentListManageEl.innerHTML = '';
+            if (students.length === 0) {
+                 studentListManageEl.innerHTML = '<p class="text-gray-500 text-center">No students found. Add one manually or upload a list.</p>';
+                 return;
+            }
+            students.forEach(student => {
+                const studentItem = document.createElement('div');
+                studentItem.className = `flex justify-between items-center p-4 rounded-lg shadow-sm border border-gray-300 bg-gray-100`;
+                studentItem.innerHTML = `
+                    <div>
+                        <span class="text-lg font-medium text-gray-800">${student.name}</span>
+                        <p class="text-sm text-gray-500">Age: ${student.age}, Standard: ${student.standard}</p>
+                    </div>
+                    <button data-id="${student.id}" class="delete-student-btn bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-full text-xs transition-colors">Delete</button>
+                `;
+                studentListManageEl.appendChild(studentItem);
+            });
+        }
+
+        function renderAttendance() {
+            attendanceListEl.innerHTML = '';
+            const selectedDate = attendanceDateInput.value;
+            if (!selectedDate) {
+                 attendanceListEl.innerHTML = '<p class="text-gray-500 text-center">Please select a date to take attendance.</p>';
+                 return;
+            }
+            if (students.length === 0) {
+                 attendanceListEl.innerHTML = '<p class="text-gray-500 text-center">No students found. Please add students first.</p>';
+                 return;
+            }
+
+            students.forEach(student => {
+                const isPresent = attendanceRecords[selectedDate] && attendanceRecords[selectedDate][student.id];
+                const studentItem = document.createElement('div');
+                studentItem.className = `student-card flex justify-between items-center p-4 rounded-lg shadow-sm border ${isPresent === true ? 'present' : isPresent === false ? 'absent' : 'bg-gray-100 border-gray-300'}`;
+                studentItem.setAttribute('data-id', student.id);
+                studentItem.setAttribute('data-status', isPresent);
+                studentItem.innerHTML = `
+                    <div>
+                        <span class="text-lg font-medium text-gray-800">${student.name}</span>
+                        <p class="text-sm text-gray-500">Age: ${student.age}, Standard: ${student.standard}</p>
+                    </div>
+                    <span class="status-label text-sm font-semibold">${isPresent === true ? 'Present' : isPresent === false ? 'Absent' : 'Tap to Mark'}</span>
+                `;
+                attendanceListEl.appendChild(studentItem);
+            });
+        }
+
+        function renderMonthlyReport() {
+            reportContainerEl.innerHTML = '';
+            const selectedMonth = reportMonthInput.value;
+
+            if (!selectedMonth) {
+                reportContainerEl.innerHTML = '<p class="text-gray-500 text-center">Please select a month to generate the report.</p>';
+                return;
+            }
+
+            const [year, month] = selectedMonth.split('-');
+            const studentReport = {};
+
+            students.forEach(student => {
+                studentReport[student.id] = {
+                    name: student.name,
+                    present: 0,
+                    absent: 0,
+                    unmarked: 0
+                };
+            });
+
+            for (const date in attendanceRecords) {
+                const [recordYear, recordMonth] = date.split('-');
+                if (recordYear === year && recordMonth === month) {
+                    for (const studentId in attendanceRecords[date]) {
+                        if (studentReport[studentId]) {
+                            const status = attendanceRecords[date][studentId];
+                            if (status === true) {
+                                studentReport[studentId].present++;
+                            } else if (status === false) {
+                                studentReport[studentId].absent++;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Render the report
+            if (Object.keys(studentReport).length === 0) {
+                 reportContainerEl.innerHTML = '<p class="text-gray-500 text-center">No students found. Please add students first.</p>';
+                 return;
+            }
+
+            const reportTable = document.createElement('div');
+            reportTable.className = 'bg-white shadow rounded-lg overflow-hidden';
+
+            const tableHeader = document.createElement('div');
+            tableHeader.className = 'flex bg-gray-200 font-bold text-gray-700 p-3 rounded-t-lg';
+            tableHeader.innerHTML = `
+                <div class="flex-1">Student</div>
+                <div class="w-16 text-center">Present</div>
+                <div class="w-16 text-center">Absent</div>
+            `;
+            reportTable.appendChild(tableHeader);
+
+            for (const studentId in studentReport) {
+                const reportData = studentReport[studentId];
+                const tableRow = document.createElement('div');
+                tableRow.className = 'flex items-center p-3 border-b last:border-b-0 border-gray-200';
+                tableRow.innerHTML = `
+                    <div class="flex-1 text-gray-800 font-medium">${reportData.name}</div>
+                    <div class="w-16 text-center text-green-600 font-bold">${reportData.present}</div>
+                    <div class="w-16 text-center text-red-600 font-bold">${reportData.absent}</div>
+                `;
+                reportTable.appendChild(tableRow);
+            }
+
+            reportContainerEl.appendChild(reportTable);
+        }
+        
+        const addStudent = () => {
+            const name = studentNameInput.value.trim();
+            const age = parseInt(studentAgeInput.value.trim());
+            const standard = studentStandardInput.value.trim();
+
+            if (name === '' || isNaN(age) || standard === '') {
+                showModal('Please enter a valid name, age, and standard.');
+                return;
+            }
+
+            const newStudent = {
+                id: Date.now(),
+                name,
+                age,
+                standard
+            };
+            students.push(newStudent);
+            localStorage.setItem('students', JSON.stringify(students));
+            renderStudentsManage();
+            studentNameInput.value = '';
+            studentAgeInput.value = '';
+            studentStandardInput.value = '';
+        };
+
+        const deleteStudent = (id) => {
+            students = students.filter(student => student.id !== id);
+            localStorage.setItem('students', JSON.stringify(students));
+            renderStudentsManage();
+        };
+
+        const handleFileUpload = (e) => {
+            const file = e.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                
+                // Assuming columns are Name, Age, Standard
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                
+                const newStudents = [];
+                // Start from row 1, assuming no header. If a header exists, this skips it.
+                // A more robust solution might check for a header row.
+                for (let i = 0; i < jsonData.length; i++) {
+                    const row = jsonData[i];
+                    if (row.length >= 3) {
+                        const name = row[0];
+                        const age = parseInt(row[1]);
+                        const standard = row[2];
+                        if (name && !isNaN(age) && standard) {
+                            newStudents.push({
+                                id: Date.now() + i, // Unique ID for each student
+                                name: String(name),
+                                age: Number(age),
+                                standard: String(standard)
+                            });
+                        }
+                    }
+                }
+
+                if (newStudents.length > 0) {
+                    students = [...students, ...newStudents];
+                    localStorage.setItem('students', JSON.stringify(students));
+                    renderStudentsManage();
+                    showModal(`Successfully added ${newStudents.length} students from the file!`);
+                } else {
+                    showModal('No valid student data found in the file. Please check the format.');
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        };
+
+        const clearAllStudents = () => {
+            students = [];
+            localStorage.setItem('students', JSON.stringify(students));
+            renderStudentsManage();
+            showModal('All students have been cleared.');
+        };
+
+        const updateLocalAttendance = (studentId, isPresent) => {
+            const date = attendanceDateInput.value;
+            if (!date) {
+                showModal('Please select a date first.');
+                return;
+            }
+
+            if (!attendanceRecords[date]) {
+                attendanceRecords[date] = {};
+            }
+            attendanceRecords[date][studentId] = isPresent;
+            localStorage.setItem('attendanceRecords', JSON.stringify(attendanceRecords));
+            renderAttendance();
+        };
+
+        const submitAttendance = () => {
+            const date = attendanceDateInput.value;
+            if (!date) {
+                showModal('Please select a date first.');
+                return;
+            }
+            if (students.length === 0) {
+                showModal('Please add students first.');
+                return;
+            }
+
+            // Check if all students have been marked
+            const allMarked = students.every(student => {
+                return attendanceRecords[date] && (attendanceRecords[date][student.id] === true || attendanceRecords[date][student.id] === false);
+            });
+
+            if (!allMarked) {
+                showModal('Please mark all students as present or absent.');
+                return;
+            }
+
+            showModal('Attendance submitted successfully!');
+            // You can add more logic here to handle what happens after submission, like clearing the list.
+        };
+
+        // Initial setup
+        document.addEventListener('DOMContentLoaded', () => {
+            showTab('addStudents');
+            const today = formatDate(new Date());
+            attendanceDateInput.value = today;
+            reportMonthInput.value = today.substring(0, 7); // Set to current month and year
+        });
+
+        // Event Listeners
+        addStudentBtn.addEventListener('click', addStudent);
+        addStudentsTab.addEventListener('click', () => showTab('addStudents'));
+        takeAttendanceTab.addEventListener('click', () => {
+            const today = formatDate(new Date());
+            attendanceDateInput.value = today;
+            renderAttendance();
+            showTab('takeAttendance');
+        });
+        monthlyReportTab.addEventListener('click', () => {
+            renderMonthlyReport();
+            showTab('monthlyReport');
+        });
+        reportMonthInput.addEventListener('change', renderMonthlyReport);
+        uploadStudentsInput.addEventListener('change', handleFileUpload);
+        clearStudentsBtn.addEventListener('click', clearAllStudents);
+
+        studentListManageEl.addEventListener('click', (e) => {
+            if (e.target.classList.contains('delete-student-btn')) {
+                const studentId = parseInt(e.target.dataset.id);
+                deleteStudent(studentId);
+            }
+        });
+
+        attendanceListEl.addEventListener('click', (e) => {
+            const studentCard = e.target.closest('.student-card');
+            if (studentCard) {
+                const studentId = parseInt(studentCard.dataset.id);
+                const date = attendanceDateInput.value;
+                
+                if (!date) {
+                    showModal('Please select a date first.');
+                    return;
+                }
+
+                if (!attendanceRecords[date]) {
+                    attendanceRecords[date] = {};
+                }
+
+                // Toggle attendance status
+                const currentStatus = attendanceRecords[date][studentId];
+                if (currentStatus === true) {
+                    attendanceRecords[date][studentId] = false; // Present -> Absent
+                } else {
+                    attendanceRecords[date][studentId] = true; // Absent/Unmarked -> Present
+                }
+                
+                localStorage.setItem('attendanceRecords', JSON.stringify(attendanceRecords));
+                renderAttendance();
+            }
+        });
+
+        window.closeModal = closeModal;
+    </script>
+</body>
+</html>
